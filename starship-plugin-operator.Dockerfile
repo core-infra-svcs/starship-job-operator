@@ -30,6 +30,11 @@ RUN --mount=type=secret,id=scmtok \
 
 # construct final image with certs and operator bin
 FROM scratch
+
+LABEL org.opencontainers.image.source=https://github.com/core-infra-svcs/starship-job-operator
+LABEL org.opencontainers.image.description="starship job operator horizontally scales and runs containers that can be remotely started via starship services"
+LABEL org.opencontainers.image.licenses=MIT
+
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /root/starship-plugin-operator .
 USER 9999:9999
