@@ -99,6 +99,9 @@ jobs:
         # concat operator manifests
         echo '---' >> starship-plugin-operator.yaml
         cat jobsvc-poller-operator.yaml >> starship-plugin-operator.yaml
+
+        # rename final manifest
+        mv starship-plugin-operator.yaml starship-job-operator.yaml
       env:
         SCM_TOKEN: ${{ secrets.SCM_TOKEN }}
     - name: Build Child Operator Docker image
@@ -120,11 +123,11 @@ jobs:
       env:
         SCM_TOKEN: ${{ secrets.SCM_TOKEN }}
     - name: Log in to Container Registry
-      uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+      uses: docker/login-action@v1
       with:
         registry: ghcr.io
         username: core-infra-svcs
-        password: ${{ secrets.GH_TOKEN }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     - name: Push Operator Docker images
       run: |
         docker push ghcr.io/core-infra-svcs/jobsvc-poller-operator:$CHILDOP_LATEST_TAG
@@ -134,4 +137,4 @@ jobs:
       with:
         name: ${{ github.ref_name }}
         tag_name: ${{ github.ref_name }}
-        files: starship-plugin-operator.yaml
+        files: starship-job-operator.yaml
