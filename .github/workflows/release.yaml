@@ -15,42 +15,10 @@ jobs:
         curl -sL https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64 > jq && chmod +x jq && sudo mv jq /usr/local/bin/
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Get SCM Latest Releases
-      run: |
-        # get child operator latest tag
-        childop_latest_tag="$( \
-          curl -sL \
-          --connect-timeout 5 \
-          --max-time 10 \
-          --retry 5 \
-          --retry-delay 5 \
-          --retry-max-time 180 \
-          -H "Accept: application/vnd.github+json" \
-          -H "Authorization: Bearer $SCM_TOKEN" \
-          'https://scm.starbucks.com/api/v3/repos/retail-infrastructure-engineering/jobsvc-poller-operator/releases/latest' | jq -r '.tag_name' \
-        )"
-
-        # get operator latest tag
-        op_latest_tag="$( \
-          curl -sL \
-          --connect-timeout 5 \
-          --max-time 10 \
-          --retry 5 \
-          --retry-delay 5 \
-          --retry-max-time 180 \
-          -H "Accept: application/vnd.github+json" \
-          -H "Authorization: Bearer $SCM_TOKEN" \
-          'https://scm.starbucks.com/api/v3/repos/retail-infrastructure-engineering/starship-plugin-operator/releases/latest' | jq -r '.tag_name' \
-        )"
-
-        # set latest tag env vars
-        echo "CHILDOP_LATEST_TAG=$childop_latest_tag" >> $GITHUB_ENV
-        echo "OP_LATEST_TAG=$op_latest_tag" >> $GITHUB_ENV
-      env:
-        SCM_TOKEN: ${{ secrets.SCM_TOKEN }}
     - name: Get SCM Latest Manifests
       run: |
         # pull down child operator manifest
+        childop_tag="$(cat config.json | jq -r '."jobsvc-poller-operator".manifest')"
         curl -sL \
         --connect-timeout 5 \
         --max-time 10 \
@@ -60,7 +28,7 @@ jobs:
         -H "Accept: application/vnd.github+json" \
         -H "Authorization: Bearer $SCM_TOKEN" \
         https://scm.starbucks.com/api/v3/repos/retail-infrastructure-engineering/jobsvc-poller-operator/releases | \
-        jq -r --arg release "$CHILDOP_LATEST_TAG" --arg asset "jobsvc-poller-operator-$CHILDOP_LATEST_TAG.yaml" \
+        jq -r --arg release "$childop_tag" --arg asset "jobsvc-poller-operator-$childop_tag.yaml" \
         '.[] | select(.name==$release) | .assets.[] | select(.name==$asset) | .url' > asset_url.txt
         
         curl -sL \
@@ -74,6 +42,7 @@ jobs:
         "$(cat asset_url.txt)" > jobsvc-poller-operator.yaml
 
         # pull down operator manifest
+        op_tag="$(cat config.json | jq -r '."starship-plugin-operator".manifest')"
         curl -sL \
         --connect-timeout 5 \
         --max-time 10 \
@@ -83,7 +52,7 @@ jobs:
         -H "Accept: application/vnd.github+json" \
         -H "Authorization: Bearer $SCM_TOKEN" \
         https://scm.starbucks.com/api/v3/repos/retail-infrastructure-engineering/starship-plugin-operator/releases | \
-        jq -r --arg release "$CHILDOP_LATEST_TAG" --arg asset "starship-plugin-operator-$OP_LATEST_TAG.yaml" \
+        jq -r --arg release "$op_tag" --arg asset "starship-plugin-operator-$op_tag.yaml" \
         '.[] | select(.name==$release) | .assets.[] | select(.name==$asset) | .url' > asset_url.txt
 
         curl -sL \
@@ -106,19 +75,21 @@ jobs:
         SCM_TOKEN: ${{ secrets.SCM_TOKEN }}
     - name: Build Child Operator Docker image
       run: |
+        childop_tag="$(cat config.json | jq -r '."jobsvc-poller-operator".bin')"
         docker build . \
         --file jobsvc-poller-operator.Dockerfile \
-        --tag jobsvc-poller-operator:$CHILDOP_LATEST_TAG \
-        --build-arg VERSION=$CHILDOP_LATEST_TAG \
+        --tag jobsvc-poller-operator:$childop_tag \
+        --build-arg VERSION=$childop_tag \
         --secret id=scmtok,env=SCM_TOKEN
       env:
         SCM_TOKEN: ${{ secrets.SCM_TOKEN }}
     - name: Build Operator Docker image
       run: |
+        op_tag="$(cat config.json | jq -r '."starship-plugin-operator".bin')"
         docker build . \
         --file starship-plugin-operator.Dockerfile \
-        --tag starship-plugin-operator:$OP_LATEST_TAG \
-        --build-arg VERSION=$OP_LATEST_TAG \
+        --tag starship-plugin-operator:$op_tag \
+        --build-arg VERSION=$op_tag \
         --secret id=scmtok,env=SCM_TOKEN
       env:
         SCM_TOKEN: ${{ secrets.SCM_TOKEN }}
@@ -130,8 +101,10 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
     - name: Push Operator Docker images
       run: |
-        docker push ghcr.io/core-infra-svcs/jobsvc-poller-operator:$CHILDOP_LATEST_TAG
-        docker push ghcr.io/core-infra-svcs/starship-plugin-operator:$OP_LATEST_TAG
+        childop_tag="$(cat config.json | jq -r '."jobsvc-poller-operator".bin')"
+        op_tag="$(cat config.json | jq -r '."starship-plugin-operator".bin')"
+        docker push ghcr.io/core-infra-svcs/jobsvc-poller-operator:$childop_tag
+        docker push ghcr.io/core-infra-svcs/starship-plugin-operator:$op_tag
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
