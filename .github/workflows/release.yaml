@@ -1,0 +1,113 @@
+name: Github Release
+
+on:
+  push:
+    tags:        
+      - 'v*'
+
+jobs:
+  release:
+    if: ${{ github.event.base_ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Install jq
+      run: |
+        curl -sL https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-amd64 > jq && chmod +x jq && sudo mv jq /usr/local/bin/
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Get SCM Latest Manifests
+      run: |
+        # pull down child operator manifest
+        childop_tag="$(cat config.json | jq -r '."jobsvc-poller-operator".manifest')"
+        curl -sL \
+        --connect-timeout 5 \
+        --max-time 10 \
+        --retry 5 \
+        --retry-delay 5 \
+        --retry-max-time 180 \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer $SCM_TOKEN" \
+        https://scm.starbucks.com/api/v3/repos/retail-infrastructure-engineering/jobsvc-poller-operator/releases | \
+        jq -r --arg release "$childop_tag" --arg asset "jobsvc-poller-operator-$childop_tag.yaml" \
+        '.[] | select(.name==$release) | .assets.[] | select(.name==$asset) | .url' > asset_url.txt
+        
+        curl -sL \
+        --connect-timeout 5 \
+        --max-time 10 \
+        --retry 5 \
+        --retry-delay 5 \
+        --retry-max-time 180 \
+        -H "Accept: application/octet-stream" \
+        -H "Authorization: Bearer $SCM_TOKEN" \
+        "$(cat asset_url.txt)" > jobsvc-poller-operator.yaml
+
+        # pull down operator manifest
+        op_tag="$(cat config.json | jq -r '."starship-plugin-operator".manifest')"
+        curl -sL \
+        --connect-timeout 5 \
+        --max-time 10 \
+        --retry 5 \
+        --retry-delay 5 \
+        --retry-max-time 180 \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer $SCM_TOKEN" \
+        https://scm.starbucks.com/api/v3/repos/retail-infrastructure-engineering/starship-plugin-operator/releases | \
+        jq -r --arg release "$op_tag" --arg asset "starship-plugin-operator-$op_tag.yaml" \
+        '.[] | select(.name==$release) | .assets.[] | select(.name==$asset) | .url' > asset_url.txt
+
+        curl -sL \
+        --connect-timeout 5 \
+        --max-time 10 \
+        --retry 5 \
+        --retry-delay 5 \
+        --retry-max-time 180 \
+        -H "Accept: application/octet-stream" \
+        -H "Authorization: Bearer $SCM_TOKEN" \
+        "$(cat asset_url.txt)" > starship-plugin-operator.yaml
+
+        # concat operator manifests
+        echo '---' >> starship-plugin-operator.yaml
+        cat jobsvc-poller-operator.yaml >> starship-plugin-operator.yaml
+
+        # rename final manifest
+        mv starship-plugin-operator.yaml starship-job-operator.yaml
+      env:
+        SCM_TOKEN: ${{ secrets.SCM_TOKEN }}
+    - name: Build Child Operator Docker image
+      run: |
+        childop_tag="$(cat config.json | jq -r '."jobsvc-poller-operator".bin')"
+        docker build . \
+        --file jobsvc-poller-operator.Dockerfile \
+        --tag jobsvc-poller-operator:$childop_tag \
+        --build-arg VERSION=$childop_tag \
+        --secret id=scmtok,env=SCM_TOKEN
+      env:
+        SCM_TOKEN: ${{ secrets.SCM_TOKEN }}
+    - name: Build Operator Docker image
+      run: |
+        op_tag="$(cat config.json | jq -r '."starship-plugin-operator".bin')"
+        docker build . \
+        --file starship-plugin-operator.Dockerfile \
+        --tag starship-plugin-operator:$op_tag \
+        --build-arg VERSION=$op_tag \
+        --secret id=scmtok,env=SCM_TOKEN
+      env:
+        SCM_TOKEN: ${{ secrets.SCM_TOKEN }}
+    - name: Log in to Container Registry
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: core-infra-svcs
+        password: ${{ secrets.GITHUB_TOKEN }}
+    - name: Push Operator Docker images
+      run: |
+        childop_tag="$(cat config.json | jq -r '."jobsvc-poller-operator".bin')"
+        op_tag="$(cat config.json | jq -r '."starship-plugin-operator".bin')"
+        docker push ghcr.io/core-infra-svcs/jobsvc-poller-operator:$childop_tag
+        docker push ghcr.io/core-infra-svcs/starship-plugin-operator:$op_tag
+    - name: Release
+      uses: softprops/action-gh-release@v2
+      with:
+        name: ${{ github.ref_name }}
+        tag_name: ${{ github.ref_name }}
+        files: starship-job-operator.yaml
