@@ -78,7 +78,7 @@ jobs:
         childop_tag="$(cat config.json | jq -r '."jobsvc-poller-operator".bin')"
         docker build . \
         --file jobsvc-poller-operator.Dockerfile \
-        --tag jobsvc-poller-operator:$childop_tag \
+        --tag ghcr.io/core-infra-svcs/jobsvc-poller-operator:$childop_tag \
         --build-arg VERSION=$childop_tag \
         --secret id=scmtok,env=SCM_TOKEN
       env:
@@ -88,7 +88,7 @@ jobs:
         op_tag="$(cat config.json | jq -r '."starship-plugin-operator".bin')"
         docker build . \
         --file starship-plugin-operator.Dockerfile \
-        --tag starship-plugin-operator:$op_tag \
+        --tag ghcr.io/core-infra-svcs/starship-plugin-operator:$op_tag \
         --build-arg VERSION=$op_tag \
         --secret id=scmtok,env=SCM_TOKEN
       env:
