@@ -39,7 +39,7 @@ spec:
 ```
 
 ## Install
-To install the operator download the below file from the desired github release. Then apply it via kubectl.
+To install the operator download the below file from the desired github release. Then create it via kubectl.
 ```bash
 kubectl create -f starship-job-operator.yaml
 ```
