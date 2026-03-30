@@ -1,7 +1,7 @@
 {
   "starship-plugin-operator": {
-    "bin": "v1.0.1",
-    "manifest": "v1.0.1"
+    "bin": "v1.0.2",
+    "manifest": "v1.0.2"
   },
   "jobsvc-poller-operator": {
     "bin": "v1.0.1",
